@@ -1,0 +1,104 @@
+{
+  "databento": {
+    "api_key": "${DATABENTO_API_KEY}",
+    "dataset": "GLBX.MDP3",
+    "symbols": [
+      "ES.c.0",
+      "NQ.c.0",
+      "YM.c.0",
+      "RTY.c.0",
+      "GC.c.0",
+      "SI.c.0",
+      "CL.c.0",
+      "NG.c.0"
+    ],
+    "schema": "ohlcv-1m",
+    "replay_hours": 24
+  },
+
+  "strategies": {
+    "simple_bullish_cci_ES": {
+      "enabled": true,
+      "description": "Test strategy: Long on bullish 5min candle with rising CCI15 (ES)",
+      "symbols": ["ES.c.0"],
+      "timeframes": ["m1", "m5"],
+      "indicators": {
+        "cci": {
+          "length": 15
+        }
+      },
+      "entry_conditions": {
+        "close_gt_open": true,
+        "close_gt_prev_close": true,
+        "cci_rising": true
+      },
+      "exit_conditions": {
+        "bars_held": 1
+      },
+      "position_sizing": {
+        "quantity": 1,
+        "order_type": "MARKET"
+      }
+    },
+
+    "simple_bullish_cci_NQ": {
+      "enabled": true,
+      "description": "Same strategy optimized for NQ with different CCI period",
+      "symbols": ["NQ.c.0"],
+      "timeframes": ["m1", "m5"],
+      "indicators": {
+        "cci": {
+          "length": 20
+        }
+      },
+      "entry_conditions": {
+        "close_gt_open": true,
+        "close_gt_prev_close": true,
+        "cci_rising": true
+      },
+      "exit_conditions": {
+        "bars_held": 1
+      },
+      "position_sizing": {
+        "quantity": 1,
+        "order_type": "MARKET"
+      }
+    },
+
+    "metals_basket": {
+      "enabled": false,
+      "description": "Multi-symbol strategy for metals (disabled for now)",
+      "symbols": ["GC.c.0", "SI.c.0"],
+      "timeframes": ["m1", "m15"],
+      "indicators": {
+        "cci": {
+          "length": 25
+        }
+      },
+      "entry_conditions": {
+        "close_gt_open": true,
+        "cci_rising": true
+      },
+      "exit_conditions": {
+        "bars_held": 2
+      },
+      "position_sizing": {
+        "quantity": 1,
+        "order_type": "MARKET"
+      }
+    }
+  },
+
+  "execution": {
+    "crosstrade_api_key": "${CROSSTRADE_API_KEY}",
+    "crosstrade_url": "https://app.crosstrade.io/v1/api",
+    "nt8_account": "DEMO4889250",
+    "dry_run": true
+  },
+
+  "logging": {
+    "level": "INFO",
+    "log_trades": true,
+    "log_bars": false
+  }
+}
