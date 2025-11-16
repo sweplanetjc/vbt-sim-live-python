@@ -115,9 +115,8 @@ class DatabentoLiveFeed:
         # Create client
         self.client = db.Live(key=self.api_key)
 
-        # Calculate replay window
-        start, end = self._calculate_replay_window()
-        logger.info(f"Requesting replay: {start} to {end}")
+        # Use start=0 to request full available replay history (last 24 trading hours)
+        logger.info(f"Requesting full intraday replay (last 24 trading hours)")
         logger.info(f"Streaming {len(self.symbols)} symbols")
 
         # Subscribe with replay for ALL symbols
@@ -126,7 +125,7 @@ class DatabentoLiveFeed:
             schema=self.schema,
             stype_in=db.SType.CONTINUOUS,
             symbols=self.symbols,  # All symbols streamed together
-            start=start,
+            start=0,  # Request full available replay history
         )
 
         self.is_running = True
@@ -136,12 +135,19 @@ class DatabentoLiveFeed:
         logger.info("Streaming bars...")
 
         try:
-            for bar in self.client:
+            for record in self.client:
                 if not self.is_running:
                     break
 
+                # Skip non-bar records (SystemMsg, ErrorMsg, etc.)
+                if not hasattr(record, "open"):
+                    # Log system messages for debugging
+                    if hasattr(record, "msg"):
+                        logger.info(f"System message: {record.msg}")
+                    continue
+
                 # Convert and emit
-                bar_dict = self._convert_bar_to_dict(bar)
+                bar_dict = self._convert_bar_to_dict(record)
                 self.on_bar_callback(bar_dict)
 
                 # Track per-symbol counts
@@ -169,4 +175,7 @@ class DatabentoLiveFeed:
         logger.info("Stopping Databento feed...")
         self.is_running = False
         if self.client:
-            self.client.close()
+            try:
+                self.client.terminate()
+            except Exception as e:
+                logger.warning(f"Error terminating client: {e}")
