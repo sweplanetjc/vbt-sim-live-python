@@ -1,0 +1,6 @@
+{
+  "crosstrade_url": "https://app.crosstrade.io/v1/api",
+  "nt8_account": "DEMO4889250",
+  "default_quantity": 1,
+  "use_market_orders": true
+}

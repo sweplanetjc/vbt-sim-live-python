@@ -1,0 +1,12 @@
+{
+  "description": "Best parameters from multi-symbol optimization (ES + NQ)",
+  "base_timeframe": "1h",
+  "higher_timeframe": "4h",
+  "symbols_tested": [
+    "ES",
+    "NQ"
+  ],
+  "date_range": "2025-01-01 to 2025-10-31",
+  "combined_return": 12.0,
+  "parameters": "Check CSV file for parameter structure"
+}

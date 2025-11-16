@@ -35,12 +35,15 @@ env/
 .idea/
 *.swp
 *.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
+.claude/
 # Data files
 data/
 results/
+
+# Backtest results (exclude large CSV files)
+backtest/results/*.csv
+backtest/results/**/*.csv
+
+# Keep small example/template files
+!backtest/results/*example*.csv
+!backtest/results/*template*.csv
