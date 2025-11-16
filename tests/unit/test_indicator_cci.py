@@ -47,3 +47,25 @@ def test_cci_update_incremental():
 
     # Last CCI value should change
     assert updated_last != initial_last
+
+
+def test_cci_zero_mean_deviation():
+    """Test CCI handles zero mean deviation (all prices identical)."""
+    # All prices identical - typical price will be constant
+    high = np.array([100, 100, 100, 100, 100], dtype=np.float64)
+    low = np.array([100, 100, 100, 100, 100], dtype=np.float64)
+    close = np.array([100, 100, 100, 100, 100], dtype=np.float64)
+
+    live_ind = IndicatorCCI_(input_args=[high, low, close, 3], kwargs={})
+    live_ind.prepare()
+    cci_values = live_ind.get()[0]
+
+    # CCI should be array of 5 values
+    assert len(cci_values) == 5
+    # First 2 values should be NaN (need 3 bars to calculate)
+    assert np.isnan(cci_values[0])
+    assert np.isnan(cci_values[1])
+    # When mean deviation is zero, CCI should be 0.0
+    assert cci_values[2] == 0.0
+    assert cci_values[3] == 0.0
+    assert cci_values[4] == 0.0

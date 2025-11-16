@@ -34,8 +34,23 @@ def cci_func_single(i: int, obj: IndicatorCCI_):
 
     CCI = (Typical Price - SMA) / (0.015 * Mean Deviation)
     Typical Price = (High + Low + Close) / 3
+
+    Args:
+        i: Bar index to calculate CCI for. Can be negative for indexing from end.
+        obj: IndicatorCCI_ instance containing price data and parameters.
+
+    Returns:
+        Tuple containing single CCI value, or (np.nan,) if insufficient data.
     """
     period = obj.length
+
+    # Validate period
+    if period <= 0:
+        raise ValueError(f"Period must be positive, got {period}")
+
+    # Handle negative indices
+    if i < 0:
+        i = len(obj.high) + i
 
     # Need at least 'period' bars
     if i < period - 1:
@@ -72,8 +87,8 @@ def cci_func_single(i: int, obj: IndicatorCCI_):
 IndicatorCCI = vbt.IF(
     class_name="IndicatorCCI",
     short_name="cci",
-    input_names=["high", "low", "close", "length"],
-    param_names=[],
+    input_names=["high", "low", "close"],
+    param_names=["length"],
     output_names=["cci"],
 ).with_apply_func(indicator_strategy_vbt_caller, takes_1d=True)
 
