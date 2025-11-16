@@ -5,32 +5,34 @@ Main client for interacting with CrossTrade API.
 """
 
 import os
-import requests
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import requests
 from dotenv import load_dotenv
 from retry import retry
 
-from .models import (
-    Account,
-    Position,
-    Order,
-    Quote,
-    Execution,
-    OrderRequest,
-    OrderState,
-)
+from logging_system import get_logger
+
 from .exceptions import (
-    CrossTradeError,
-    AuthenticationError,
-    RateLimitError,
-    OrderError,
     AccountNotFoundError,
+    AuthenticationError,
+    CrossTradeError,
     InstrumentNotFoundError,
     InsufficientMarginError,
+    OrderError,
+    RateLimitError,
+)
+from .models import (
+    Account,
+    Execution,
+    Order,
+    OrderRequest,
+    OrderState,
+    Position,
+    Quote,
 )
 from .rate_limiter import RateLimiter
-from logging_system import get_logger
 
 logger = get_logger(__name__)
 
@@ -65,33 +67,36 @@ class CrossTradeClient:
         load_dotenv()
 
         # Configuration
-        self.api_key = api_key or os.getenv('CROSSTRADE_API_KEY')
-        self.base_url = base_url or os.getenv('CROSSTRADE_BASE_URL', 'https://app.crosstrade.io/v1/api')
-        self.account = account or os.getenv('CROSSTRADE_ACCOUNT')
+        self.api_key = api_key or os.getenv("CROSSTRADE_API_KEY")
+        self.base_url = base_url or os.getenv(
+            "CROSSTRADE_BASE_URL", "https://app.crosstrade.io/v1/api"
+        )
+        self.account = account or os.getenv("CROSSTRADE_ACCOUNT")
 
         if not self.api_key:
-            raise ValueError("API key not provided. Set CROSSTRADE_API_KEY environment variable or pass api_key parameter.")
+            raise ValueError(
+                "API key not provided. Set CROSSTRADE_API_KEY environment variable or pass api_key parameter."
+            )
 
         # Rate limiter (60 requests per minute)
-        self.rate_limiter = rate_limiter or RateLimiter(max_requests=60, period_seconds=60)
+        self.rate_limiter = rate_limiter or RateLimiter(
+            max_requests=60, period_seconds=60
+        )
 
         # HTTP session
         self.session = requests.Session()
-        self.session.headers.update({
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        })
+        self.session.headers.update(
+            {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            }
+        )
 
         logger.info("CrossTrade client initialized")
         logger.info(f"Base URL: {self.base_url}")
         logger.info(f"Default account: {self.account}")
 
-    def _request(
-        self,
-        method: str,
-        endpoint: str,
-        **kwargs
-    ) -> requests.Response:
+    def _request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
         """Make HTTP request with rate limiting and error handling.
 
         Args:
@@ -117,29 +122,41 @@ class CrossTradeClient:
         # Make request
         try:
             response = self.session.request(
-                method=method,
-                url=url,
-                timeout=kwargs.pop('timeout', 10),
-                **kwargs
+                method=method, url=url, timeout=kwargs.pop("timeout", 10), **kwargs
             )
 
             # Handle errors
             if response.status_code == 401:
                 raise AuthenticationError("Invalid API key")
             elif response.status_code == 429:
-                retry_after = response.headers.get('Retry-After')
-                raise RateLimitError(retry_after=int(retry_after) if retry_after else None)
+                retry_after_header = response.headers.get("Retry-After")
+                retry_after = None
+                if retry_after_header:
+                    try:
+                        # Try to parse as integer seconds
+                        retry_after = int(retry_after_header)
+                    except ValueError:
+                        # Header may be non-integer (e.g., "1s") or malformed
+                        try:
+                            # Try float and cast to int
+                            retry_after = int(float(retry_after_header))
+                        except ValueError:
+                            # Fall back to None
+                            retry_after = None
+                raise RateLimitError(retry_after=retry_after)
             elif response.status_code == 404:
                 raise AccountNotFoundError(f"Resource not found: {endpoint}")
             elif response.status_code >= 400:
-                raise CrossTradeError(f"API error {response.status_code}: {response.text}")
+                raise CrossTradeError(
+                    f"API error {response.status_code}: {response.text}"
+                )
 
             return response
 
-        except requests.exceptions.Timeout:
-            raise CrossTradeError("Request timeout")
-        except requests.exceptions.ConnectionError:
-            raise CrossTradeError("Connection error")
+        except requests.exceptions.Timeout as e:
+            raise CrossTradeError("Request timeout") from e
+        except requests.exceptions.ConnectionError as e:
+            raise CrossTradeError("Connection error") from e
 
     # ===================================================================
     # Account Methods
@@ -153,18 +170,21 @@ class CrossTradeClient:
             List of Account objects
         """
         logger.info("Fetching accounts")
-        response = self._request('GET', '/accounts')
+        response = self._request("GET", "/accounts")
 
         # Parse response - handle both dict and list formats
         data = response.json()
-        if isinstance(data, dict) and 'accounts' in data:
-            accounts_data = data['accounts']
+        if isinstance(data, dict) and "accounts" in data:
+            accounts_data = data["accounts"]
         elif isinstance(data, list):
             accounts_data = data
         else:
             accounts_data = [data]
 
-        accounts = [Account(**acc) if isinstance(acc, dict) else Account(name=str(acc)) for acc in accounts_data]
+        accounts = [
+            Account(**acc) if isinstance(acc, dict) else Account(name=str(acc))
+            for acc in accounts_data
+        ]
         logger.info(f"Found {len(accounts)} account(s)")
         return accounts
 
@@ -183,7 +203,7 @@ class CrossTradeClient:
             raise ValueError("Account name required")
 
         logger.info(f"Fetching account: {account}")
-        response = self._request('GET', f'/accounts/{account}')
+        response = self._request("GET", f"/accounts/{account}")
         return Account(**response.json())
 
     # ===================================================================
@@ -205,12 +225,12 @@ class CrossTradeClient:
             raise ValueError("Account name required")
 
         logger.info(f"Fetching positions for {account}")
-        response = self._request('GET', f'/accounts/{account}/positions')
+        response = self._request("GET", f"/accounts/{account}/positions")
 
         data = response.json()
         # API returns {"positions": [...], "success": true}
-        if isinstance(data, dict) and 'positions' in data:
-            positions = [Position(**pos) for pos in data['positions']]
+        if isinstance(data, dict) and "positions" in data:
+            positions = [Position(**pos) for pos in data["positions"]]
         elif isinstance(data, list):
             positions = [Position(**pos) for pos in data]
         else:
@@ -220,11 +240,7 @@ class CrossTradeClient:
         return positions
 
     @retry(exceptions=RateLimitError, tries=3, delay=2)
-    def close_position(
-        self,
-        instrument: str,
-        account: Optional[str] = None
-    ) -> Order:
+    def close_position(self, instrument: str, account: Optional[str] = None) -> Order:
         """Close specific position.
 
         Args:
@@ -240,8 +256,7 @@ class CrossTradeClient:
 
         logger.info(f"Closing position: {instrument} in {account}")
         response = self._request(
-            'POST',
-            f'/accounts/{account}/positions/{instrument}/close'
+            "POST", f"/accounts/{account}/positions/{instrument}/close"
         )
         return Order(**response.json())
 
@@ -264,15 +279,17 @@ class CrossTradeClient:
         # API endpoint: /v1/api/positions/flatten
         # Can optionally pass account filter in body
         body = {"account": account} if account else {}
-        response = self._request('POST', '/positions/flatten', json=body)
+        response = self._request("POST", "/positions/flatten", json=body)
 
         data = response.json()
 
-        order_ids = data.get('orderIds', [])
-        closed_positions = data.get('closedPositions', [])
-        success = data.get('success', False)
+        order_ids = data.get("orderIds", [])
+        closed_positions = data.get("closedPositions", [])
+        success = data.get("success", False)
 
-        logger.info(f"Flatten result: {len(order_ids)} order(s), {len(closed_positions)} position(s) closed, success={success}")
+        logger.info(
+            f"Flatten result: {len(order_ids)} order(s), {len(closed_positions)} position(s) closed, success={success}"
+        )
         return data
 
     # ===================================================================
@@ -281,9 +298,7 @@ class CrossTradeClient:
 
     @retry(exceptions=RateLimitError, tries=3, delay=2)
     def get_orders(
-        self,
-        account: Optional[str] = None,
-        active_only: bool = True
+        self, account: Optional[str] = None, active_only: bool = True
     ) -> List[Order]:
         """Get orders for account.
 
@@ -299,11 +314,11 @@ class CrossTradeClient:
             raise ValueError("Account name required")
 
         logger.info(f"Fetching orders for {account} (active_only={active_only})")
-        endpoint = f'/accounts/{account}/orders'
+        endpoint = f"/accounts/{account}/orders"
         if active_only:
-            endpoint += '?status=WORKING'
+            endpoint += "?status=WORKING"
 
-        response = self._request('GET', endpoint)
+        response = self._request("GET", endpoint)
 
         data = response.json()
         if isinstance(data, list):
@@ -316,9 +331,7 @@ class CrossTradeClient:
 
     @retry(exceptions=RateLimitError, tries=3, delay=2)
     def submit_order(
-        self,
-        order_request: OrderRequest,
-        account: Optional[str] = None
+        self, order_request: OrderRequest, account: Optional[str] = None
     ) -> Order:
         """Submit new order.
 
@@ -337,20 +350,22 @@ class CrossTradeClient:
         if not account:
             raise ValueError("Account name required")
 
-        logger.info(f"Submitting order: {order_request.action} {order_request.quantity} {order_request.instrument}")
+        logger.info(
+            f"Submitting order: {order_request.action} {order_request.quantity} {order_request.instrument}"
+        )
 
         try:
             response = self._request(
-                'POST',
-                f'/accounts/{account}/orders/place',
-                json=order_request.to_dict()
+                "POST",
+                f"/accounts/{account}/orders/place",
+                json=order_request.to_dict(),
             )
             response_data = response.json()
 
             # API returns {orderId, success}, but we need full Order object
             # Get the order details from get_orders endpoint
-            if response_data.get('success'):
-                order_id = response_data['orderId']
+            if response_data.get("success"):
+                order_id = response_data["orderId"]
                 logger.info(f"Order submitted successfully: {order_id}")
 
                 # Fetch full order details
@@ -371,23 +386,19 @@ class CrossTradeClient:
                     stopPrice=order_request.stopPrice,
                     filledQuantity=0,
                     state=OrderState.PENDING_SUBMIT,
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.utcnow(),
                 )
                 return order
             else:
                 raise OrderError(f"Order submission failed: {response_data}")
 
         except CrossTradeError as e:
-            if 'margin' in str(e).lower():
+            if "margin" in str(e).lower():
                 raise InsufficientMarginError(str(e))
             raise OrderError(str(e))
 
     @retry(exceptions=RateLimitError, tries=3, delay=2)
-    def cancel_order(
-        self,
-        order_id: str,
-        account: Optional[str] = None
-    ) -> Order:
+    def cancel_order(self, order_id: str, account: Optional[str] = None) -> Order:
         """Cancel existing order.
 
         Args:
@@ -402,10 +413,7 @@ class CrossTradeClient:
             raise ValueError("Account name required")
 
         logger.info(f"Cancelling order: {order_id}")
-        response = self._request(
-            'DELETE',
-            f'/accounts/{account}/orders/{order_id}'
-        )
+        response = self._request("DELETE", f"/accounts/{account}/orders/{order_id}")
         order = Order(**response.json())
         logger.info(f"Order cancelled: {order_id}")
         return order
@@ -415,11 +423,7 @@ class CrossTradeClient:
     # ===================================================================
 
     @retry(exceptions=RateLimitError, tries=3, delay=2)
-    def get_quote(
-        self,
-        instrument: str,
-        account: Optional[str] = None
-    ) -> Quote:
+    def get_quote(self, instrument: str, account: Optional[str] = None) -> Quote:
         """Get real-time quote for instrument.
 
         Args:
@@ -435,19 +439,17 @@ class CrossTradeClient:
 
         logger.debug(f"Fetching quote: {instrument}")
         response = self._request(
-            'GET',
-            f'/accounts/{account}/quote',
-            params={'instrument': instrument}
+            "GET", f"/accounts/{account}/quote", params={"instrument": instrument}
         )
         quote_data = response.json()
 
         # Add timestamp if not present in API response
-        if 'timestamp' not in quote_data:
-            quote_data['timestamp'] = datetime.utcnow()
+        if "timestamp" not in quote_data:
+            quote_data["timestamp"] = datetime.utcnow()
 
         # Add instrument if not present in API response
-        if 'instrument' not in quote_data:
-            quote_data['instrument'] = instrument
+        if "instrument" not in quote_data:
+            quote_data["instrument"] = instrument
 
         quote = Quote(**quote_data)
         return quote
@@ -461,7 +463,7 @@ class CrossTradeClient:
         self,
         account: Optional[str] = None,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> List[Execution]:
         """Get trade executions for account.
 
@@ -481,14 +483,12 @@ class CrossTradeClient:
 
         params = {}
         if start_date:
-            params['start_date'] = start_date.isoformat()
+            params["start_date"] = start_date.isoformat()
         if end_date:
-            params['end_date'] = end_date.isoformat()
+            params["end_date"] = end_date.isoformat()
 
         response = self._request(
-            'GET',
-            f'/accounts/{account}/executions',
-            params=params if params else None
+            "GET", f"/accounts/{account}/executions", params=params if params else None
         )
 
         data = response.json()

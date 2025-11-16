@@ -6,9 +6,10 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 
-def setup_logging(level: str = "INFO", log_file: str = None):
+def setup_logging(level: str = "INFO", log_file: Optional[str] = None):
     """Setup logging configuration.
 
     Args:
@@ -51,7 +52,10 @@ def setup_logging(level: str = "INFO", log_file: str = None):
 def get_logger(name):
     """Get a logger instance with the given name."""
     logger = logging.getLogger(name)
-    if not logger.handlers:
+    root_logger = logging.getLogger()
+
+    # Only add handler if both root and named logger have no handlers
+    if not logger.handlers and not root_logger.handlers:
         handler = logging.StreamHandler()
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -59,4 +63,7 @@ def get_logger(name):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
+        # Prevent propagation to avoid duplicate output
+        logger.propagate = False
+
     return logger

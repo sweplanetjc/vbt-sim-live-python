@@ -391,7 +391,8 @@ def test_date_l_is_last_bar_of_period():
         bar = {
             "symbol": "ES.c.0",
             "date": base_time + timedelta(minutes=i),
-            "date_l": base_time + timedelta(minutes=i, seconds=30),  # 30 secs into minute
+            "date_l": base_time
+            + timedelta(minutes=i, seconds=30),  # 30 secs into minute
             "open": 4500.0,
             "high": 4505.0,
             "low": 4495.0,
@@ -427,6 +428,5 @@ def test_symbol_mismatch_error():
         "cpl": True,
     }
 
-    with pytest.raises(ValueError, match="Symbol mismatch"):
+    with pytest.raises(ValueError, match="doesn't match aggregator symbol"):
         agg.add_bar(bar)
-

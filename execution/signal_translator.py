@@ -5,19 +5,19 @@ Translates Vector Bot trading signals to CrossTrade order submissions.
 Handles position sizing, risk management, and order type selection.
 """
 
-from typing import Optional, Dict, Any
 from enum import Enum
+from typing import Any, Dict, Optional
 
-from .order_manager import OrderManager
-from .models import Order, OrderAction, OrderType, TimeInForce
-from .exceptions import OrderError
 from logging_system import get_logger
+
+from .exceptions import OrderError
+from .models import Order, OrderAction, OrderType, TimeInForce
+from .order_manager import OrderManager
 
 logger = get_logger(__name__)
 
 
 class SignalType(str, Enum):
-    """Trading signal types."""
     LONG_ENTRY = "LONG_ENTRY"
     SHORT_ENTRY = "SHORT_ENTRY"
     EXIT = "EXIT"
@@ -51,36 +51,32 @@ class SignalTranslator:
     # Futures contract multipliers (dollar value per 1-point move)
     INSTRUMENT_MULTIPLIERS = {
         # E-mini Equity Indices
-        "ES": 50.0,      # E-mini S&P 500: $50 per point
-        "NQ": 20.0,      # E-mini NASDAQ-100: $20 per point
-        "YM": 5.0,       # E-mini Dow: $5 per point
-        "RTY": 50.0,     # E-mini Russell 2000: $50 per point
-
+        "ES": 50.0,  # E-mini S&P 500: $50 per point
+        "NQ": 20.0,  # E-mini NASDAQ-100: $20 per point
+        "YM": 5.0,  # E-mini Dow: $5 per point
+        "RTY": 50.0,  # E-mini Russell 2000: $50 per point
         # Metals
-        "GC": 100.0,     # Gold: $100 per troy ounce
-        "SI": 5000.0,    # Silver: $5000 per 5000 troy ounces
-        "HG": 25000.0,   # Copper: $25,000 per contract
-
+        "GC": 100.0,  # Gold: $100 per troy ounce
+        "SI": 5000.0,  # Silver: $5000 per 5000 troy ounces
+        "HG": 25000.0,  # Copper: $25,000 per contract
         # Energy
-        "CL": 1000.0,    # Crude Oil: $1000 per contract
-        "NG": 10000.0,   # Natural Gas: $10,000 per contract
-
+        "CL": 1000.0,  # Crude Oil: $1000 per contract
+        "NG": 10000.0,  # Natural Gas: $10,000 per contract
         # Currencies
         "6E": 125000.0,  # Euro FX: $125,000 per contract
-        "6J": 12500000.0, # Japanese Yen: ¥12,500,000 per contract
-        "6B": 62500.0,   # British Pound: £62,500 per contract
-
+        "6J": 12500000.0,  # Japanese Yen: ¥12,500,000 per contract
+        "6B": 62500.0,  # British Pound: £62,500 per contract
         # Treasuries
-        "ZB": 1000.0,    # 30-Year T-Bond: $1000 per point
-        "ZN": 1000.0,    # 10-Year T-Note: $1000 per point
-        "ZF": 1000.0,    # 5-Year T-Note: $1000 per point
+        "ZB": 1000.0,  # 30-Year T-Bond: $1000 per point
+        "ZN": 1000.0,  # 10-Year T-Note: $1000 per point
+        "ZF": 1000.0,  # 5-Year T-Note: $1000 per point
     }
 
     def __init__(
         self,
         order_manager: OrderManager,
         default_quantity: int = 1,
-        use_market_orders: bool = True
+        use_market_orders: bool = True,
     ):
         """Initialize signal translator.
 
@@ -102,16 +98,37 @@ class SignalTranslator:
     # Signal Processing
     # ===================================================================
 
+    def _normalize_signal_type(self, signal_type: Any) -> SignalType:
+        """Normalize signal_type to SignalType enum.
+
+        Args:
+            signal_type: SignalType enum or string value
+
+        Returns:
+            SignalType enum member
+
+        Raises:
+            OrderError: If signal_type is invalid
+        """
+        if isinstance(signal_type, SignalType):
+            return signal_type
+
+        if isinstance(signal_type, str):
+            try:
+                return SignalType(signal_type)
+            except ValueError:
+                raise OrderError(f"Invalid signal_type: {signal_type}")
+
+        raise OrderError(f"Invalid signal_type type: {type(signal_type)}")
+
     def process_signal(
-        self,
-        signal: Dict[str, Any],
-        quantity: Optional[int] = None
+        self, signal: Dict[str, Any], quantity: Optional[int] = None
     ) -> Optional[Order]:
         """Process trading signal and submit order.
 
         Args:
             signal: Signal dictionary with keys:
-                - signal_type: SignalType (LONG_ENTRY, SHORT_ENTRY, EXIT, etc.)
+                - signal_type: SignalType enum or string (LONG_ENTRY, SHORT_ENTRY, EXIT, etc.)
                 - instrument: Instrument name (e.g., "ES 03-25")
                 - price: Signal price (for limit orders)
                 - stop_price: Optional stop price (for stop orders)
@@ -122,7 +139,7 @@ class SignalTranslator:
             Order object if submitted, None if signal filtered
 
         Raises:
-            OrderError: If order submission fails
+            OrderError: If order submission fails or signal_type is invalid
 
         Example:
             >>> signal = {
@@ -132,8 +149,8 @@ class SignalTranslator:
             ... }
             >>> order = translator.process_signal(signal)
         """
-        # Extract signal fields
-        signal_type = signal.get("signal_type")
+        # Extract and normalize signal fields
+        signal_type = self._normalize_signal_type(signal.get("signal_type"))
         instrument = signal.get("instrument")
         price = signal.get("price")
         stop_price = signal.get("stop_price")
@@ -170,7 +187,7 @@ class SignalTranslator:
         instrument: str,
         quantity: int,
         price: Optional[float] = None,
-        stop_price: Optional[float] = None
+        stop_price: Optional[float] = None,
     ) -> Order:
         """Handle long entry signal.
 
@@ -191,15 +208,13 @@ class SignalTranslator:
                 instrument=instrument,
                 action=OrderAction.BUY,
                 quantity=quantity,
-                stop_price=stop_price
+                stop_price=stop_price,
             )
 
         # Market order
         elif self.use_market_orders or price is None:
             return self.order_manager.submit_market_order(
-                instrument=instrument,
-                action=OrderAction.BUY,
-                quantity=quantity
+                instrument=instrument, action=OrderAction.BUY, quantity=quantity
             )
 
         # Limit order
@@ -208,7 +223,7 @@ class SignalTranslator:
                 instrument=instrument,
                 action=OrderAction.BUY,
                 quantity=quantity,
-                limit_price=price
+                limit_price=price,
             )
 
     def _handle_short_entry(
@@ -216,7 +231,7 @@ class SignalTranslator:
         instrument: str,
         quantity: int,
         price: Optional[float] = None,
-        stop_price: Optional[float] = None
+        stop_price: Optional[float] = None,
     ) -> Order:
         """Handle short entry signal.
 
@@ -237,15 +252,13 @@ class SignalTranslator:
                 instrument=instrument,
                 action=OrderAction.SELL_SHORT,
                 quantity=quantity,
-                stop_price=stop_price
+                stop_price=stop_price,
             )
 
         # Market order
         elif self.use_market_orders or price is None:
             return self.order_manager.submit_market_order(
-                instrument=instrument,
-                action=OrderAction.SELL_SHORT,
-                quantity=quantity
+                instrument=instrument, action=OrderAction.SELL_SHORT, quantity=quantity
             )
 
         # Limit order
@@ -254,7 +267,7 @@ class SignalTranslator:
                 instrument=instrument,
                 action=OrderAction.SELL_SHORT,
                 quantity=quantity,
-                limit_price=price
+                limit_price=price,
             )
 
     # ===================================================================
@@ -286,9 +299,7 @@ class SignalTranslator:
         logger.info(f"Exit long: {quantity} {instrument}")
 
         return self.order_manager.submit_market_order(
-            instrument=instrument,
-            action=OrderAction.SELL,
-            quantity=quantity
+            instrument=instrument, action=OrderAction.SELL, quantity=quantity
         )
 
     def _handle_exit_short(self, instrument: str, quantity: int) -> Order:
@@ -304,9 +315,7 @@ class SignalTranslator:
         logger.info(f"Exit short: {quantity} {instrument}")
 
         return self.order_manager.submit_market_order(
-            instrument=instrument,
-            action=OrderAction.BUY_TO_COVER,
-            quantity=quantity
+            instrument=instrument, action=OrderAction.BUY_TO_COVER, quantity=quantity
         )
 
     # ===================================================================
@@ -314,8 +323,7 @@ class SignalTranslator:
     # ===================================================================
 
     def process_signals_batch(
-        self,
-        signals: list[Dict[str, Any]]
+        self, signals: list[Dict[str, Any]]
     ) -> list[Optional[Order]]:
         """Process multiple signals in batch.
 
@@ -339,9 +347,14 @@ class SignalTranslator:
             try:
                 order = self.process_signal(signal)
                 orders.append(order)
-            except Exception as e:
-                logger.exception(f"Failed to process signal {signal}")
+            except (OrderError, ValueError) as e:
+                logger.error(f"Failed to process signal {signal}: {e}", exc_info=True)
                 orders.append(None)
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error processing signal {signal}: {e}", exc_info=True
+                )
+                raise
 
         successful = sum(1 for o in orders if o is not None)
         logger.info(f"Processed {successful}/{len(signals)} signals successfully")
@@ -353,10 +366,7 @@ class SignalTranslator:
     # ===================================================================
 
     def calculate_position_size(
-        self,
-        signal: Dict[str, Any],
-        account_value: float,
-        risk_percent: float = 0.01
+        self, signal: Dict[str, Any], account_value: float, risk_percent: float = 0.01
     ) -> int:
         """Calculate position size based on risk parameters.
 
@@ -469,9 +479,7 @@ class SignalTranslator:
         return None
 
     def should_enter_trade(
-        self,
-        signal: Dict[str, Any],
-        allow_reversals: bool = False
+        self, signal: Dict[str, Any], allow_reversals: bool = False
     ) -> bool:
         """Determine if trade should be entered.
 
@@ -483,7 +491,7 @@ class SignalTranslator:
             True if should enter, False if should skip
         """
         instrument = signal.get("instrument")
-        signal_type = signal.get("signal_type")
+        signal_type = self._normalize_signal_type(signal.get("signal_type"))
 
         # Check existing position
         current_qty = self.check_existing_position(instrument)
@@ -504,7 +512,9 @@ class SignalTranslator:
                     self.order_manager.flatten_position(instrument)
                     return True
                 else:
-                    logger.info(f"Already long {instrument}, skipping short entry (reversals disabled)")
+                    logger.info(
+                        f"Already long {instrument}, skipping short entry (reversals disabled)"
+                    )
                     return False
 
         # Short position
@@ -519,7 +529,9 @@ class SignalTranslator:
                     self.order_manager.flatten_position(instrument)
                     return True
                 else:
-                    logger.info(f"Already short {instrument}, skipping long entry (reversals disabled)")
+                    logger.info(
+                        f"Already short {instrument}, skipping long entry (reversals disabled)"
+                    )
                     return False
 
         return True

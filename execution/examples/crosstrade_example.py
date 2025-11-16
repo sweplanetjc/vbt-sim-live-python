@@ -150,7 +150,7 @@ def example_1_simple_execution():
 
     # Signal from scanner (your live_scanner.py would generate this)
     signal = {
-        "signal_type": "LONG_ENTRY",
+        "signal_type": SignalType.LONG_ENTRY,
         "instrument": "ES 03-25",
         "price": 5850.0,
         "timestamp": datetime.now().isoformat(),
@@ -163,7 +163,7 @@ def example_1_simple_execution():
         print(f"\n✅ Order submitted: {order.orderId}")
         print(f"   Status: {order.state}")
     else:
-        print("\n❌ Order failed")
+        print("\n❌ Order failed or filtered")
 
 
 def example_2_with_position_check():
@@ -185,14 +185,17 @@ def example_2_with_position_check():
 
     # No position, proceed with entry
     signal = {
-        "signal_type": "LONG_ENTRY",
+        "signal_type": SignalType.LONG_ENTRY,
         "instrument": "ES 03-25",
         "price": 5850.0,
         "timestamp": datetime.now().isoformat(),
     }
 
     order = executor.execute_signal(signal)
-    print(f"✅ New position opened: {order.orderId}")
+    if order:
+        print(f"✅ New position opened: {order.orderId}")
+    else:
+        print("❌ Order failed or filtered")
 
 
 def example_3_full_round_trip():
@@ -206,7 +209,7 @@ def example_3_full_round_trip():
 
     # ENTRY
     entry_signal = {
-        "signal_type": "LONG_ENTRY",
+        "signal_type": SignalType.LONG_ENTRY,
         "instrument": "ES 03-25",
         "price": 5850.0,
         "timestamp": datetime.now().isoformat(),
@@ -230,7 +233,7 @@ def example_3_full_round_trip():
 
     # EXIT
     exit_signal = {
-        "signal_type": "EXIT",
+        "signal_type": SignalType.EXIT,
         "instrument": "ES 03-25",
         "timestamp": datetime.now().isoformat(),
     }
@@ -256,13 +259,13 @@ def example_4_batch_signals():
     # Multiple signals from scanner (ES and NQ)
     signals = [
         {
-            "signal_type": "LONG_ENTRY",
+            "signal_type": SignalType.LONG_ENTRY,
             "instrument": "ES 03-25",
             "price": 5850.0,
             "timestamp": datetime.now().isoformat(),
         },
         {
-            "signal_type": "LONG_ENTRY",
+            "signal_type": SignalType.LONG_ENTRY,
             "instrument": "NQ 03-25",
             "price": 20500.0,
             "timestamp": datetime.now().isoformat(),
@@ -362,7 +365,7 @@ def example_6_error_handling():
 
     # Test with invalid signal (missing required fields)
     invalid_signal = {
-        "signal_type": "LONG_ENTRY",
+        "signal_type": SignalType.LONG_ENTRY,
         # Missing "instrument" and "price"
     }
 
@@ -374,7 +377,7 @@ def example_6_error_handling():
 
     # Test with valid signal
     valid_signal = {
-        "signal_type": "LONG_ENTRY",
+        "signal_type": SignalType.LONG_ENTRY,
         "instrument": "ES 03-25",
         "price": 5850.0,
         "timestamp": datetime.now().isoformat(),
@@ -385,6 +388,8 @@ def example_6_error_handling():
 
     if order:
         print(f"✅ Valid signal executed: {order.orderId}")
+    else:
+        print("❌ Valid signal failed")
 
 
 def main():

@@ -39,7 +39,9 @@ env/
 .claude/
 # Data files
 data/
-results/
+
+# Backtest results - root-level results directory
+/results/
 
 # Backtest results (exclude large CSV files)
 backtest/results/*.csv

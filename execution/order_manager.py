@@ -411,7 +411,9 @@ class OrderManager:
 
         # Determine opposite action
         close_action = (
-            OrderAction.SELL if target_position.quantity > 0 else OrderAction.BUY
+            OrderAction.SELL
+            if target_position.quantity > 0
+            else OrderAction.BUY_TO_COVER
         )
         close_quantity = abs(target_position.quantity)
 

@@ -86,10 +86,12 @@ class TestConfigFileValidation(unittest.TestCase):
         """Test that nonexistent config file causes exit."""
         mock_logger_instance = MagicMock()
         mock_logger.return_value = mock_logger_instance
+        mock_exit.side_effect = SystemExit(1)
 
         from run_live_trading import main
 
-        main()
+        with self.assertRaises(SystemExit):
+            main()
 
         # Verify error was logged
         mock_logger_instance.error.assert_called_once()
@@ -230,13 +232,15 @@ class TestErrorHandling(unittest.TestCase):
         """Test that fatal errors are logged and cause exit."""
         mock_exists.return_value = True
         mock_orch.side_effect = Exception("Fatal test error")
+        mock_exit.side_effect = SystemExit(1)
 
         mock_logger_instance = MagicMock()
         mock_logger.return_value = mock_logger_instance
 
         from run_live_trading import main
 
-        main()
+        with self.assertRaises(SystemExit):
+            main()
 
         # Verify exception was logged
         mock_logger_instance.exception.assert_called_once()
