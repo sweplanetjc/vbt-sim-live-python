@@ -8,54 +8,62 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from scanner.databento_live_feed import DatabentoLiveFeed
 
-bar_count = 0
-minute_bar_count = 0
 
+def main():
+    """Main function to run the Databento feed test."""
+    bar_count = 0
+    minute_bar_count = 0
 
-def on_bar(bar):
-    """Callback for 1-minute bars."""
-    global minute_bar_count
-    minute_bar_count += 1
-    if minute_bar_count % 10 == 0:
-        print(
-            f"Received {minute_bar_count} 1-minute bars (latest: {bar['symbol']} @ {bar['close']:.2f})"
+    def on_bar(bar):
+        """Callback for 1-minute bars."""
+        nonlocal minute_bar_count
+        minute_bar_count += 1
+        if minute_bar_count % 10 == 0:
+            print(
+                f"Received {minute_bar_count} 1-minute bars (latest: {bar['symbol']} @ {bar['close']:.2f})"
+            )
+
+    # Get API key from environment
+    api_key = os.getenv("DATABENTO_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ERROR: DATABENTO_API_KEY environment variable not set. "
+            "Please set it before running: export DATABENTO_API_KEY='your_key_here'"
         )
 
+    # Configure feed with just ES and NQ
+    config = {
+        "api_key": api_key,
+        "dataset": "GLBX.MDP3",
+        "symbols": ["ES.c.0", "NQ.c.0"],  # Continuous symbols (like old implementation)
+        "schema": "ohlcv-1s",
+        "replay_hours": 24,
+    }
 
-# Get API key from environment
-api_key = os.getenv("DATABENTO_API_KEY")
-if not api_key:
-    print("ERROR: DATABENTO_API_KEY environment variable not set")
-    sys.exit(1)
+    print("Starting Databento feed test...")
+    print(f"Symbols: {config['symbols']}")
+    print(f"Schema: {config['schema']}")
+    print("=" * 80)
 
-# Configure feed with just ES and NQ
-config = {
-    "api_key": api_key,
-    "dataset": "GLBX.MDP3",
-    "symbols": ["ES.c.0", "NQ.c.0"],  # Continuous symbols (like old implementation)
-    "schema": "ohlcv-1s",
-    "replay_hours": 24,
-}
+    try:
+        feed = DatabentoLiveFeed(
+            api_key=config["api_key"],
+            dataset=config["dataset"],
+            symbols=config["symbols"],
+            schema=config["schema"],
+            replay_hours=config["replay_hours"],
+            on_1min_bar=on_bar,
+        )
+        feed.start()
+    except KeyboardInterrupt:
+        print(f"\n\nTest stopped. Received {minute_bar_count} 1-minute bars total.")
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
 
-print("Starting Databento feed test...")
-print(f"Symbols: {config['symbols']}")
-print(f"Schema: {config['schema']}")
-print("=" * 80)
+        traceback.print_exc()
+        raise
 
-try:
-    feed = DatabentoLiveFeed(
-        api_key=config["api_key"],
-        dataset=config["dataset"],
-        symbols=config["symbols"],
-        schema=config["schema"],
-        replay_hours=config["replay_hours"],
-        on_1min_bar=on_bar,
-    )
-    feed.start()
-except KeyboardInterrupt:
-    print(f"\n\nTest stopped. Received {minute_bar_count} 1-minute bars total.")
-except Exception as e:
-    print(f"Error: {e}")
-    import traceback
 
-    traceback.print_exc()
+if __name__ == "__main__":
+    main()
