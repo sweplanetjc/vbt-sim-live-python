@@ -128,12 +128,19 @@ class SimpleBullishCCIStrategy:
 
     def _initialize_indicators(self):
         """Initialize CCI indicator once we have enough bars."""
+        # Create CCI indicator
         import numpy as np
 
-        # Create CCI indicator
-        high = self.live_data.get_feature("high")
-        low = self.live_data.get_feature("low")
-        close = self.live_data.get_feature("close")
+        # Get price arrays
+        high_full = self.live_data.get_feature("high")
+        low_full = self.live_data.get_feature("low")
+        close_full = self.live_data.get_feature("close")
+
+        # Filter out NaN values - only use valid bars for indicator calculation
+        valid_mask = ~np.isnan(close_full)
+        high = high_full[valid_mask]
+        low = low_full[valid_mask]
+        close = close_full[valid_mask]
 
         self.cci_indicator = IndicatorCCI_(
             input_args=[high, low, close, self.cci_length],
@@ -145,7 +152,25 @@ class SimpleBullishCCIStrategy:
 
         # Add CCI feature to live_data
         cci_values = self.cci_indicator.get()[0]
-        self.live_data.add_feature("cci", cci_values)
+
+        # Ensure CCI array matches the size of other arrays in live_data
+        # The CCI was calculated only on valid bars, so we need to pad it
+        # to match the full array size and place values at the correct positions
+        existing_size = len(close_full)
+
+        # Create a new array with the right size, filled with NaN
+        cci_padded = np.full(existing_size, np.nan, dtype=np.float64)
+
+        # Place CCI values at the end of the valid bar positions
+        # CCI needs cci_length bars to calculate, so first (cci_length-1) values will be NaN
+        num_cci_values = len(cci_values)
+        valid_indices = np.where(valid_mask)[0]
+
+        if num_cci_values > 0 and len(valid_indices) >= num_cci_values:
+            # Place CCI values at the last N valid positions where N = len(cci_values)
+            cci_padded[valid_indices[-num_cci_values:]] = cci_values
+
+        self.live_data.add_feature("cci", cci_padded)
 
         self._indicators_initialized = True
         logger.info(f"CCI indicator initialized for {self.symbol}")
@@ -197,9 +222,57 @@ class SimpleBullishCCIStrategy:
 
         # Update CCI indicator incrementally
         if self._indicators_initialized:
-            self.cci_indicator.update()
+            import numpy as np
+
+            # Get latest data from LiveData
+            close_full = self.live_data.get_feature("close")
+            high_full = self.live_data.get_feature("high")
+            low_full = self.live_data.get_feature("low")
+
+            # Filter out NaN values to get valid bars
+            valid_mask = ~np.isnan(close_full)
+            high_valid = high_full[valid_mask]
+            low_valid = low_full[valid_mask]
+            close_valid = close_full[valid_mask]
+
+            # Update indicator's input arrays with latest data
+            self.cci_indicator.high = high_valid
+            self.cci_indicator.low = low_valid
+            self.cci_indicator.close = close_valid
+
+            # Update length to match array size for create_features()
+            # but preserve the CCI period parameter separately
+            cci_period = (
+                self.cci_indicator.length
+            )  # Save the CCI period (15 for ES, 20 for NQ)
+            self.cci_indicator.length = len(
+                close_valid
+            )  # Set to array size for output array creation
+
+            # Recreate output arrays with new length
+            self.cci_indicator.create_features()
+
+            # Restore the CCI period parameter
+            self.cci_indicator.length = cci_period
+
+            # Recalculate CCI for all bars
+            self.cci_indicator.prepare()
+
+            # Get CCI values
             cci_values = self.cci_indicator.get()[0]
-            self.live_data.data["cci"] = cci_values
+
+            # Map CCI values back to padded array positions
+            existing_size = len(close_full)
+            cci_padded = np.full(existing_size, np.nan, dtype=np.float64)
+
+            # Place CCI values at valid bar positions
+            num_cci_values = len(cci_values)
+            valid_indices = np.where(valid_mask)[0]
+
+            if num_cci_values > 0 and len(valid_indices) >= num_cci_values:
+                cci_padded[valid_indices[-num_cci_values:]] = cci_values
+
+            self.live_data.data["cci"] = cci_padded
 
         # Check if we have at least 2 valid bars for comparison
         num_valid_bars = self._count_valid_bars()
@@ -219,6 +292,22 @@ class SimpleBullishCCIStrategy:
 
         current = df_valid.iloc[-1]
         previous = df_valid.iloc[-2]
+
+        # Log CCI values for monitoring (always show on evaluation)
+        import numpy as np
+
+        current_cci = current.get("cci", np.nan)
+        previous_cci = previous.get("cci", np.nan)
+
+        # Debug: Show CCI array to diagnose why prev is NaN
+        cci_array = self.live_data.get_feature("cci")
+        valid_cci = cci_array[~np.isnan(cci_array)]
+        logger.debug(f"  {self.symbol} CCI array (valid values): {valid_cci[-5:]}")
+
+        logger.info(
+            f"  {self.symbol} CCI evaluation: prev={previous_cci:.2f}, current={current_cci:.2f}, "
+            f"O={current['open']:.2f}, H={current['high']:.2f}, L={current['low']:.2f}, C={current['close']:.2f}"
+        )
 
         # Entry logic
         if self.position is None:

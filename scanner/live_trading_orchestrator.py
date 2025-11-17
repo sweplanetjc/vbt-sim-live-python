@@ -56,6 +56,11 @@ class LiveTradingOrchestrator:
         Args:
             config_path: Path to live trading config JSON file
         """
+        # Load environment variables from .env file first
+        from dotenv import load_dotenv
+
+        load_dotenv()
+
         self.config_path = Path(config_path)
         self.config = None
         self.is_running = False
@@ -67,6 +72,9 @@ class LiveTradingOrchestrator:
         # Shared components
         self.feed = None
         self.order_manager = None
+
+        # Replay mode flag - True during historical replay, False for live trading
+        self.replay_mode = True
 
         # Load and validate config
         self._load_config()
@@ -85,6 +93,15 @@ class LiveTradingOrchestrator:
             f"{len(self.strategies)} strategies, "
             f"{len(self.aggregators)} symbols"
         )
+
+    def set_live_mode(self):
+        """Switch from replay mode to live trading mode.
+
+        Called when replay is complete and we transition to real-time data.
+        """
+        self.replay_mode = False
+        logger.info("🔴 REPLAY COMPLETE - SWITCHING TO LIVE TRADING MODE")
+        logger.info("=" * 80)
 
     def _load_config(self) -> None:
         """Load and validate configuration file.
@@ -232,8 +249,16 @@ class LiveTradingOrchestrator:
         """Initialize DatabentoLiveFeed with all configured symbols."""
         logger.info("Initializing Databento feed...")
 
+        databento_config = self.config["databento"]
+
         self.feed = DatabentoLiveFeed(
-            config=self.config["databento"], on_bar_callback=self.on_1min_bar
+            api_key=databento_config["api_key"],
+            dataset=databento_config["dataset"],
+            symbols=databento_config["symbols"],
+            schema=databento_config.get("schema", "ohlcv-1s"),
+            replay_hours=databento_config.get("replay_hours", 24),
+            on_1min_bar=self.on_1min_bar,
+            on_replay_complete=self.set_live_mode,
         )
 
         logger.info(
@@ -291,6 +316,10 @@ class LiveTradingOrchestrator:
         """
         symbol = bar["symbol"]
 
+        logger.info(
+            f"📊 Received 1-min bar: {symbol} @ {bar['close']:.2f} (time: {bar['date']})"
+        )
+
         # Skip if we don't have aggregators for this symbol
         if symbol not in self.aggregators:
             logger.debug(f"Received bar for untracked symbol: {symbol}")
@@ -300,6 +329,9 @@ class LiveTradingOrchestrator:
         for tf, aggregator in self.aggregators[symbol].items():
             completed_bar = aggregator.add_bar(bar)
             if completed_bar:
+                logger.info(
+                    f"✅ Completed {tf.name} bar for {symbol}: {completed_bar['close']:.2f} (bar timestamp: {completed_bar['date']})"
+                )
                 self._on_aggregated_bar(completed_bar, tf)
 
     def _on_aggregated_bar(self, bar: Dict, timeframe: TFs) -> None:
@@ -315,13 +347,25 @@ class LiveTradingOrchestrator:
         for strat_dict in self.strategies:
             if strat_dict["symbol"] == symbol and strat_dict["timeframe"] == timeframe:
                 strategy = strat_dict["instance"]
+                logger.info(
+                    f"🔍 Evaluating strategy {strat_dict['name']} on {symbol} {timeframe.name} bar"
+                )
                 signal = strategy.on_bar(bar)
 
                 if signal:
+                    # SUPPRESS ORDERS DURING REPLAY MODE
+                    if self.replay_mode:
+                        logger.debug(
+                            f"⏸️  Replay mode: Suppressing {signal['action']} signal for {signal['symbol']}"
+                        )
+                        continue  # Skip order execution during replay
+
                     logger.info(
-                        f"Signal from {strat_dict['name']} ({symbol}): {signal}"
+                        f"🚨 Signal from {strat_dict['name']} ({symbol}): {signal}"
                     )
                     self._execute_signal(signal)
+                else:
+                    logger.info(f"   No signal generated")
 
     def _execute_signal(self, signal: Dict) -> None:
         """Send signal to execution layer.

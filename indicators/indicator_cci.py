@@ -3,6 +3,7 @@
 """CCI (Commodity Channel Index) Indicator."""
 
 import numpy as np
+
 import vectorbtpro as vbt
 
 from .indicator_root import IndicatorRoot
@@ -17,7 +18,9 @@ class IndicatorCCI_(IndicatorRoot):
 
     def prepare(self):
         """Calculate CCI for entire history."""
-        for j in range(len(self.high)):
+        # Use the smaller of input length or output array length to avoid index errors
+        max_idx = min(len(self.high), len(self.__dict__[self.output_names[0]]))
+        for j in range(max_idx):
             ret = cci_func_single(j, self)
             for i, n in enumerate(self.output_names):
                 self.__dict__[n][j] = ret[i]
@@ -79,6 +82,16 @@ def cci_func_single(i: int, obj: IndicatorCCI_):
     # CCI calculation
     current_tp = (obj.high[i] + obj.low[i] + obj.close[i]) / 3.0
     cci = (current_tp - sma_tp) / (0.015 * mean_dev)
+
+    # Debug logging for troubleshooting
+    if i == len(obj.high) - 1:  # Only log for last bar
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"CCI Debug: period={period}, current_tp={current_tp:.2f}, sma_tp={sma_tp:.2f}, mean_dev={mean_dev:.2f}, cci={cci:.2f}"
+        )
+        logger.info(f"CCI Debug: Last {min(5, len(tp))} TPs: {tp[-5:]}")
 
     return (cci,)
 

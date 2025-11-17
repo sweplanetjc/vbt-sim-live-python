@@ -131,24 +131,26 @@ class BarAggregator:
             self._start_new_period(bar)
             return None
 
-        # Check if this bar starts a new period
-        if self._is_new_period(bar_time):
-            # Complete previous period
+        # Add bar to current period first
+        self._add_to_current_period(bar)
+
+        # Check if we should complete this period (i.e., next bar would start new period)
+        # We complete when this bar is the LAST bar of the current period
+        if self._is_period_complete(bar_time):
+            # Complete and return the period
             completed_bar = self._complete_period()
-
-            # Start new period with current bar
-            self._start_new_period(bar)
-
             return completed_bar
         else:
-            # Add bar to current period
-            self._add_to_current_period(bar)
             return None
 
     def _is_new_period(self, bar_time: datetime) -> bool:
-        """Check if bar_time starts a new period using generic algorithm.
+        """Check if bar_time starts a new period using calendar boundary alignment.
 
-        This is the core of the generic timeframe support.
+        For live trading, bars must align to calendar boundaries:
+        - m5: 00, 05, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55
+        - m15: 00, 15, 30, 45
+        - m30: 00, 30
+        etc.
 
         Args:
             bar_time: Timestamp of incoming bar
@@ -156,15 +158,55 @@ class BarAggregator:
         Returns:
             True if this bar starts a new period
         """
-        # Calculate minutes elapsed since period start
-        time_diff = bar_time - self.period_start
-        minutes_elapsed = time_diff.total_seconds() / 60
-
         # Calculate period length in minutes
         period_minutes = self.target_tf.value // 60
 
-        # New period starts when we've elapsed the full period
-        return minutes_elapsed >= period_minutes
+        # Floor both timestamps to their respective period boundaries
+        period_start_floored = self._floor_to_period(self.period_start, period_minutes)
+        bar_time_floored = self._floor_to_period(bar_time, period_minutes)
+
+        # New period starts when the floored timestamps differ
+        return bar_time_floored != period_start_floored
+
+    def _is_period_complete(self, bar_time: datetime) -> bool:
+        """Check if current period is complete after adding this bar.
+
+        A period is complete when the next bar would cross the period boundary.
+        For a 5-minute period starting at 01:40 (covers 01:40-01:45), the period
+        completes when we receive the bar timestamped 01:44 (last bar before 01:45).
+
+        We check: would the NEXT bar (1 minute after this one) cross into a new period?
+
+        Args:
+            bar_time: Timestamp of the bar just added
+
+        Returns:
+            True if this bar completes the period
+        """
+        from datetime import timedelta
+
+        # Calculate what the next bar's timestamp would be (1 minute from now)
+        next_bar_time = bar_time + timedelta(minutes=1)
+
+        # If the next bar would start a new period, then this bar completes current period
+        return self._is_new_period(next_bar_time)
+
+    def _floor_to_period(self, timestamp: datetime, period_minutes: int) -> datetime:
+        """Floor timestamp to the start of its period boundary.
+
+        Args:
+            timestamp: Timestamp to floor
+            period_minutes: Period length in minutes
+
+        Returns:
+            Timestamp floored to period boundary
+        """
+        # Get minute of hour (0-59)
+        minute = timestamp.minute
+        # Calculate which period bucket this falls into
+        period_bucket = (minute // period_minutes) * period_minutes
+        # Return timestamp with minute floored to bucket start
+        return timestamp.replace(minute=period_bucket, second=0, microsecond=0)
 
     def _start_new_period(self, bar: Dict) -> None:
         """Start new aggregation period with given bar.
@@ -192,6 +234,17 @@ class BarAggregator:
         Args:
             bar: Bar to add to current period
         """
+        # If this is the first bar of a new period after completion, start new period
+        if self.current_bar is None:
+            self._start_new_period(bar)
+            return
+
+        # Check if this bar starts a new period
+        if self._is_new_period(bar["date"]):
+            # Start new period with this bar (previous period was already completed)
+            self._start_new_period(bar)
+            return
+
         # Update OHLCV according to aggregation rules
         # Open stays as first bar's open
         self.current_bar["high"] = max(self.current_bar["high"], bar["high"])
