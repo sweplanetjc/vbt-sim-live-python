@@ -68,6 +68,9 @@ class LiveTradingOrchestrator:
         self.feed = None
         self.order_manager = None
 
+        # Replay mode flag - True during historical replay, False for live trading
+        self.replay_mode = True
+
         # Load and validate config
         self._load_config()
 
@@ -85,6 +88,15 @@ class LiveTradingOrchestrator:
             f"{len(self.strategies)} strategies, "
             f"{len(self.aggregators)} symbols"
         )
+
+    def set_live_mode(self):
+        """Switch from replay mode to live trading mode.
+
+        Called when replay is complete and we transition to real-time data.
+        """
+        self.replay_mode = False
+        logger.info("🔴 REPLAY COMPLETE - SWITCHING TO LIVE TRADING MODE")
+        logger.info("=" * 80)
 
     def _load_config(self) -> None:
         """Load and validate configuration file.
@@ -291,6 +303,10 @@ class LiveTradingOrchestrator:
         """
         symbol = bar["symbol"]
 
+        logger.info(
+            f"📊 Received 1-min bar: {symbol} @ {bar['close']:.2f} (time: {bar['date']})"
+        )
+
         # Skip if we don't have aggregators for this symbol
         if symbol not in self.aggregators:
             logger.debug(f"Received bar for untracked symbol: {symbol}")
@@ -300,6 +316,9 @@ class LiveTradingOrchestrator:
         for tf, aggregator in self.aggregators[symbol].items():
             completed_bar = aggregator.add_bar(bar)
             if completed_bar:
+                logger.info(
+                    f"✅ Completed {tf.name} bar for {symbol}: {completed_bar['close']:.2f}"
+                )
                 self._on_aggregated_bar(completed_bar, tf)
 
     def _on_aggregated_bar(self, bar: Dict, timeframe: TFs) -> None:
@@ -315,13 +334,18 @@ class LiveTradingOrchestrator:
         for strat_dict in self.strategies:
             if strat_dict["symbol"] == symbol and strat_dict["timeframe"] == timeframe:
                 strategy = strat_dict["instance"]
+                logger.info(
+                    f"🔍 Evaluating strategy {strat_dict['name']} on {symbol} {timeframe.name} bar"
+                )
                 signal = strategy.on_bar(bar)
 
                 if signal:
                     logger.info(
-                        f"Signal from {strat_dict['name']} ({symbol}): {signal}"
+                        f"🚨 Signal from {strat_dict['name']} ({symbol}): {signal}"
                     )
                     self._execute_signal(signal)
+                else:
+                    logger.info(f"   No signal generated")
 
     def _execute_signal(self, signal: Dict) -> None:
         """Send signal to execution layer.
