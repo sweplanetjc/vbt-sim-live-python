@@ -73,9 +73,6 @@ class LiveTradingOrchestrator:
         self.feed = None
         self.order_manager = None
 
-        # Replay mode flag - True during historical replay, False for live trading
-        self.replay_mode = True
-
         # Load and validate config
         self._load_config()
 
@@ -95,12 +92,12 @@ class LiveTradingOrchestrator:
         )
 
     def set_live_mode(self):
-        """Switch from replay mode to live trading mode.
+        """Called when intraday replay is complete.
 
-        Called when replay is complete and we transition to real-time data.
+        No longer needed since we execute all signals regardless of replay status.
+        Kept for compatibility with feed callback.
         """
-        self.replay_mode = False
-        logger.info("🔴 REPLAY COMPLETE - SWITCHING TO LIVE TRADING MODE")
+        logger.info("📊 Intraday replay complete - continuing with live data")
         logger.info("=" * 80)
 
     def _load_config(self) -> None:
@@ -353,13 +350,6 @@ class LiveTradingOrchestrator:
                 signal = strategy.on_bar(bar)
 
                 if signal:
-                    # SUPPRESS ORDERS DURING REPLAY MODE
-                    if self.replay_mode:
-                        logger.debug(
-                            f"⏸️  Replay mode: Suppressing {signal['action']} signal for {signal['symbol']}"
-                        )
-                        continue  # Skip order execution during replay
-
                     logger.info(
                         f"🚨 Signal from {strat_dict['name']} ({symbol}): {signal}"
                     )
@@ -420,20 +410,34 @@ class LiveTradingOrchestrator:
             logger.error(f"Error executing signal: {e}", exc_info=True)
 
     def _map_symbol_to_instrument(self, symbol: str) -> str:
-        """Map Databento symbol format to CrossTrade instrument format.
+        """Map Databento symbol format to CrossTrade continuous contract format.
 
         Args:
-            symbol: Databento symbol (e.g., "ES.c.0")
+            symbol: Databento symbol (e.g., "ES.c.0", "NQ.c.0")
 
         Returns:
-            CrossTrade instrument name (e.g., "ES 03-25")
+            CrossTrade continuous contract (e.g., "ES1!", "NQ1!")
 
-        Note: For now, just returns the symbol as-is.
-        In production, would need proper symbol mapping logic.
+        Note: CrossTrade uses root + "1!" for continuous front-month contracts.
+        This automatically rolls to the next contract when volume shifts.
         """
-        # TODO: Implement proper symbol mapping
-        # For now, assume symbols are already in correct format
-        return symbol
+        # Mapping for Databento continuous to CrossTrade specific contracts
+        # Format: "ES.c.0" -> "ESZ5" (December 2025 contracts)
+        symbol_map = {
+            "ES.c.0": "ESZ5",  # E-mini S&P 500 Dec 2025
+            "NQ.c.0": "NQZ5",  # E-mini NASDAQ Dec 2025
+            "YM.c.0": "YMZ5",  # E-mini Dow Dec 2025
+            "RTY.c.0": "RTYZ5",  # E-mini Russell 2000 Dec 2025
+            "GC.c.0": "GCZ5",  # Gold Dec 2025
+            "SI.c.0": "SIZ5",  # Silver Dec 2025
+            "CL.c.0": "CLF6",  # Crude Oil Jan 2026
+            "NG.c.0": "NGF6",  # Natural Gas Jan 2026
+        }
+
+        mapped = symbol_map.get(symbol, symbol)
+        if mapped != symbol:
+            logger.info(f"Symbol mapping: {symbol} → {mapped}")
+        return mapped
 
     def start(self) -> None:
         """Start live trading.

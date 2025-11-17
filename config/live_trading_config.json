@@ -12,7 +12,7 @@
       "CL.c.0",
       "NG.c.0"
     ],
-    "schema": "ohlcv-1m",
+    "schema": "ohlcv-1s",
     "replay_hours": 24
   },
 
@@ -93,7 +93,7 @@
     "crosstrade_api_key": "${CROSSTRADE_API_KEY}",
     "crosstrade_url": "https://app.crosstrade.io/v1/api",
     "nt8_account": "DEMO4889250",
-    "dry_run": true
+    "dry_run": false
   },
 
   "logging": {
