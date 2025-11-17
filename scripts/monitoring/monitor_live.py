@@ -1,7 +1,11 @@
 """Live monitoring script - shows real-time bars and prices."""
 
 import os
+import sys
 from datetime import datetime
+
+# Add project root to path for module imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from scanner.databento_live_feed import DatabentoLiveFeed
 
@@ -30,28 +34,36 @@ def on_1min_bar(bar):
     print(f"{'=' * 80}")
 
 
-# Set API key
-os.environ["DATABENTO_API_KEY"] = "db-i9rsBy5Wk96eJNHG6LfLGSHeba87Y"
+# Get API key from environment
+api_key = os.environ.get("DATABENTO_API_KEY")
+if not api_key:
+    raise ValueError(
+        "DATABENTO_API_KEY environment variable not set. "
+        "Please set it before running: export DATABENTO_API_KEY='your-key'"
+    )
 
-# Configure feed - just ES and NQ for clarity
-config = {
-    "api_key": os.environ["DATABENTO_API_KEY"],
-    "dataset": "GLBX.MDP3",
-    "symbols": ["ES.c.0", "NQ.c.0"],
-    "schema": "ohlcv-1s",
-    "replay_hours": 24,
-}
+# Configure symbols - just ES and NQ for clarity
+symbols = ["ES.c.0", "NQ.c.0"]
+dataset = "GLBX.MDP3"
+replay_hours = 24
 
 print("=" * 80)
 print("LIVE MARKET DATA MONITOR")
 print("=" * 80)
-print(f"Symbols: {config['symbols']}")
+print(f"Symbols: {symbols}")
 print(f"Started: {datetime.now()}")
 print("=" * 80)
 print("\nWaiting for 1-minute bars...\n")
 
 try:
-    feed = DatabentoLiveFeed(config, on_bar_callback=on_1min_bar)
+    feed = DatabentoLiveFeed(
+        api_key=api_key,
+        dataset=dataset,
+        symbols=symbols,
+        schema="ohlcv-1s",
+        replay_hours=replay_hours,
+        on_1min_bar=on_1min_bar,
+    )
     feed.start()  # Blocking
 except KeyboardInterrupt:
     print(f"\n\n{'=' * 80}")
