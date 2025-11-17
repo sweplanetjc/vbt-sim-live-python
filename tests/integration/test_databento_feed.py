@@ -22,12 +22,15 @@ def on_bar(bar):
         )
 
 
-# Set API key
-os.environ["DATABENTO_API_KEY"] = "db-i9rsBy5Wk96eJNHG6LfLGSHeba87Y"
+# Get API key from environment
+api_key = os.getenv("DATABENTO_API_KEY")
+if not api_key:
+    print("ERROR: DATABENTO_API_KEY environment variable not set")
+    sys.exit(1)
 
 # Configure feed with just ES and NQ
 config = {
-    "api_key": os.environ["DATABENTO_API_KEY"],
+    "api_key": api_key,
     "dataset": "GLBX.MDP3",
     "symbols": ["ES.c.0", "NQ.c.0"],  # Continuous symbols (like old implementation)
     "schema": "ohlcv-1s",

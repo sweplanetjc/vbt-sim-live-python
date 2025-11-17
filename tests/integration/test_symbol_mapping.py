@@ -8,10 +8,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import databento as db
 
-os.environ["DATABENTO_API_KEY"] = "db-i9rsBy5Wk96eJNHG6LfLGSHeba87Y"
+# Get API key from environment
+api_key = os.getenv("DATABENTO_API_KEY")
+if not api_key:
+    print("ERROR: DATABENTO_API_KEY environment variable not set")
+    sys.exit(1)
 
 print("Connecting to Databento live feed...")
-client = db.Live(key=os.environ["DATABENTO_API_KEY"])
+client = db.Live(key=api_key)
 
 client.subscribe(
     dataset="GLBX.MDP3",
