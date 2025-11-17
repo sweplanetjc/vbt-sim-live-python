@@ -244,8 +244,16 @@ class LiveTradingOrchestrator:
         """Initialize DatabentoLiveFeed with all configured symbols."""
         logger.info("Initializing Databento feed...")
 
+        databento_config = self.config["databento"]
+
         self.feed = DatabentoLiveFeed(
-            config=self.config["databento"], on_bar_callback=self.on_1min_bar
+            api_key=databento_config["api_key"],
+            dataset=databento_config["dataset"],
+            symbols=databento_config["symbols"],
+            schema=databento_config.get("schema", "ohlcv-1s"),
+            replay_hours=databento_config.get("replay_hours", 24),
+            on_1min_bar=self.on_1min_bar,
+            on_replay_complete=self.set_live_mode,
         )
 
         logger.info(
