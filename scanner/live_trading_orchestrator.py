@@ -348,6 +348,13 @@ class LiveTradingOrchestrator:
                 signal = strategy.on_bar(bar)
 
                 if signal:
+                    # SUPPRESS ORDERS DURING REPLAY MODE
+                    if self.replay_mode:
+                        logger.debug(
+                            f"⏸️  Replay mode: Suppressing {signal['action']} signal for {signal['symbol']}"
+                        )
+                        continue  # Skip order execution during replay
+
                     logger.info(
                         f"🚨 Signal from {strat_dict['name']} ({symbol}): {signal}"
                     )
