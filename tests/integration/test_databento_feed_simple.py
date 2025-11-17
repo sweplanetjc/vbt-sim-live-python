@@ -10,6 +10,9 @@ from datetime import datetime
 
 import pytz
 
+# Add project root to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+
 
 # Simple mock for TFs enum since we can't import vbt_sim_live
 class TFsMock:

@@ -12,6 +12,9 @@ import numpy as np
 import pandas as pd
 import pytz
 
+# Add project root to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+
 
 # Simple mock for TFs enum
 class TFsMock:
