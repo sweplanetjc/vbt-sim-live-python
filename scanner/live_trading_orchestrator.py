@@ -56,6 +56,11 @@ class LiveTradingOrchestrator:
         Args:
             config_path: Path to live trading config JSON file
         """
+        # Load environment variables from .env file first
+        from dotenv import load_dotenv
+
+        load_dotenv()
+
         self.config_path = Path(config_path)
         self.config = None
         self.is_running = False
@@ -325,7 +330,7 @@ class LiveTradingOrchestrator:
             completed_bar = aggregator.add_bar(bar)
             if completed_bar:
                 logger.info(
-                    f"✅ Completed {tf.name} bar for {symbol}: {completed_bar['close']:.2f}"
+                    f"✅ Completed {tf.name} bar for {symbol}: {completed_bar['close']:.2f} (bar timestamp: {completed_bar['date']})"
                 )
                 self._on_aggregated_bar(completed_bar, tf)
 
