@@ -43,7 +43,14 @@ print(f"Schema: {config['schema']}")
 print("=" * 80)
 
 try:
-    feed = DatabentoLiveFeed(config, on_bar_callback=on_bar)
+    feed = DatabentoLiveFeed(
+        api_key=config["api_key"],
+        dataset=config["dataset"],
+        symbols=config["symbols"],
+        schema=config["schema"],
+        replay_hours=config["replay_hours"],
+        on_1min_bar=on_bar,
+    )
     feed.start()
 except KeyboardInterrupt:
     print(f"\n\nTest stopped. Received {minute_bar_count} 1-minute bars total.")
