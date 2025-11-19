@@ -92,7 +92,7 @@
   "execution": {
     "crosstrade_api_key": "${CROSSTRADE_API_KEY}",
     "crosstrade_url": "https://app.crosstrade.io/v1/api",
-    "nt8_account": "DEMO4889250",
+    "nt8_account": "Sim101",
     "dry_run": false
   },
 
